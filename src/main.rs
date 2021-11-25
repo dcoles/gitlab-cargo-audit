@@ -28,6 +28,8 @@ fn main() -> anyhow::Result<()> {
     let database = Database::fetch().context("failed to fetch advisory-db")?;
     let vulnerabilities = database.vulnerabilities(&lockfile);
 
+    print_vulnerabilities(&vulnerabilities);
+
     let report = report::Report {
         version: REPORT_VERSION.to_string(),
         vulnerabilities: report_vulnerabilities(&vulnerabilities),
@@ -78,6 +80,20 @@ fn discover_packages(cargo_toml: &toml::Value) -> anyhow::Result<HashSet<String>
     }
 
     Ok(packages)
+}
+
+/// Print list of vulnerabilities
+fn print_vulnerabilities(vulnerabilities: &[Vulnerability]) {
+    if vulnerabilities.is_empty() {
+        eprintln!("No vulnerabilities detected");
+        return;
+    }
+
+    eprintln!("Warning: {} vulnerabilities detected", vulnerabilities.len());
+    for vuln in vulnerabilities {
+        eprintln!("- [{}] {} ({})", vuln.advisory.package, vuln.advisory.title, vuln.advisory.id);
+        eprintln!("  See https://rustsec.org/advisories/{} for details", vuln.advisory.id);
+    }
 }
 
 /// Build list of [`report::Dependency`] from a dependency tree.

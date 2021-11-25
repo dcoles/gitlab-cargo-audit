@@ -10,11 +10,9 @@ Add the following to your `.gitlab-ci.yml`:
 audit:
   stage: test
   script:
-    - cargo audit
-  after_script:
-    - gitlab-cargo-audit > dependency-report.json
+    - gitlab-cargo-audit > gl-dependency-scanning-report.json
   artifacts:
     when: always
     reports:
-      dependency_scanning: dependency-report.json
+      dependency_scanning: gl-dependency-scanning-report.json
 ```
