@@ -4,8 +4,6 @@
 
 use serde::Serialize;
 
-pub type IID = usize;
-
 #[derive(Serialize, Debug, Default)]
 pub struct Report {
     pub version: String,
@@ -86,9 +84,14 @@ pub struct Location {
 pub struct Dependency {
     pub package: Option<Package>,
     pub version: Option<String>,
-    pub iid: Option<IID>,
+    pub iid: Option<usize>,
     pub direct: Option<bool>,
     pub dependency_path: Option<Vec<IID>>
+}
+
+#[derive(Serialize, Debug, Default)]
+pub struct IID {
+    pub iid: usize,
 }
 
 #[derive(Serialize, Debug, Default)]

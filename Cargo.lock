@@ -117,9 +117,11 @@ name = "gitlab-cargo-audit"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "petgraph",
  "rustsec",
  "serde",
  "serde_json",
+ "toml",
 ]
 
 [[package]]
