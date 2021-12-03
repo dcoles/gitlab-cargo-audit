@@ -8,6 +8,7 @@ use std::path::Path;
 use anyhow::Context;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::Bfs;
+use rustsec::advisory::Severity;
 use rustsec::cargo_lock::dependency::Tree;
 use rustsec::{Database, Vulnerability};
 use rustsec::lockfile::Lockfile;
@@ -159,7 +160,8 @@ fn report_vulnerabilities(vulnerabilities: &[Vulnerability]) -> Vec<report::Vuln
             message: Some(format!("[{}] {}", vuln.advisory.package, vuln.advisory.title)),
             description: Some(vuln.advisory.description.clone()),
             cve: vuln.advisory.id.to_string(),
-            severity: Some(report::Severity::High),
+            severity: vuln.advisory.cvss.as_ref().map(|cvss| map_severity(cvss.severity()))
+                .unwrap_or_default(),
             identifiers: vec![
                 report::Identifier {
                     r#type: String::from("rustsec"),
@@ -196,4 +198,14 @@ fn report_vulnerabilities(vulnerabilities: &[Vulnerability]) -> Vec<report::Vuln
             ..Default::default()
         }
     }).collect()
+}
+
+fn map_severity(severity: Severity) -> report::Severity {
+    match severity {
+        Severity::None => report::Severity::Info,
+        Severity::Low => report::Severity::Low,
+        Severity::Medium => report::Severity::Medium,
+        Severity::High => report::Severity::High,
+        Severity::Critical => report::Severity::Critical,
+    }
 }

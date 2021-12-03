@@ -20,7 +20,7 @@ pub struct Vulnerability {
     pub message: Option<String>,
     pub description: Option<String>,
     pub cve: String,
-    pub severity: Option<Severity>,
+    pub severity: Severity,
     pub confidence: Option<Confidence>,
     pub solution: Option<String>,
     pub scanner: Scanner,
@@ -40,6 +40,12 @@ pub enum Severity {
     Medium,
     High,
     Critical,   
+}
+
+impl Default for Severity {
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
 
 #[allow(dead_code)]
