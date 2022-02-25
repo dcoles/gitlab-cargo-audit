@@ -16,3 +16,7 @@ audit:
     reports:
       dependency_scanning: gl-dependency-scanning-report.json
 ```
+
+## License
+
+Dual licensed under the [MIT](LICENSE-MIT) and [Apache 2.0](LICENSE-APACHE) licenses.
