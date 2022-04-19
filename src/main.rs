@@ -157,6 +157,7 @@ fn report_vulnerabilities(vulnerabilities: &[Vulnerability]) -> Vec<report::Vuln
         report::Vulnerability {
             id: Some(vuln.advisory.id.to_string()),  // FIXME: Should be a UUID
             category: String::from("dependency_scanning"),
+            name: Some(vuln.advisory.title.to_string()),
             message: Some(format!("[{}] {}", vuln.advisory.package, vuln.advisory.title)),
             description: Some(vuln.advisory.description.clone()),
             cve: vuln.advisory.id.to_string(),
