@@ -10,8 +10,7 @@ use petgraph::graph::NodeIndex;
 use petgraph::visit::Bfs;
 use rustsec::advisory::Severity;
 use rustsec::cargo_lock::dependency::Tree;
-use rustsec::{Database, Vulnerability};
-use rustsec::lockfile::Lockfile;
+use rustsec::{Database, Vulnerability, Lockfile};
 use serde_json;
 
 const CARGO_TOML: &str = "Cargo.toml";
