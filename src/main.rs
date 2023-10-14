@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
+use std::process::Command;
 
 use anyhow::Context;
 use petgraph::graph::NodeIndex;
@@ -21,6 +22,14 @@ const SCANNER_ID: &str = "cargo_audit";
 const SCANNER_NAME: &str = "cargo-audit";
 
 fn main() -> anyhow::Result<()> {
+    if !Path::new(LOCKFILE).exists() && Path::new(CARGO_TOML).exists() {
+        // Try to generate `Cargo.lock`
+        let status = Command::new("cargo").arg("generate-lockfile").status().context("failed to execute `cargo generate-lockfile`")?;
+        if !status.success() {
+            anyhow::bail!("`cargo generate-lockfile` terminated with an error: {status}");
+        }
+    }
+
     let lockfile = Lockfile::load(LOCKFILE).context("failed to load lockfile")?;
     let cargo_toml = load_toml(CARGO_TOML).context("failed to load Cargo.toml")?;
     let packages = discover_packages(&cargo_toml).context("failed to discover packages")?;
