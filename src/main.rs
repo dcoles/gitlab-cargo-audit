@@ -120,6 +120,9 @@ fn report_dependencies(dependency_tree: &Tree, packages: &HashSet<String>) -> Ve
         while let Some(u) = bfs.next(&graph) {
             for v in graph.neighbors(u) {
                 let package = &graph[v];
+                if predecessor.contains(&v) {
+                    continue;
+                }
                 predecessor[v.index()] = u;
 
                 let dependency_path = dependency_path(&predecessor, v);
