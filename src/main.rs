@@ -1,8 +1,8 @@
 mod report;
 
 use std::collections::HashSet;
-use std::fs::File;
-use std::io::{self, Read};
+use std::fs;
+use std::io;
 use std::path::Path;
 use std::process::Command;
 
@@ -34,6 +34,8 @@ const ISO8601_CFG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
     .encode();
 
 fn main() -> anyhow::Result<()> {
+    env_logger::init();
+
     if !Path::new(LOCKFILE).exists() && Path::new(CARGO_TOML).exists() {
         // Try to generate `Cargo.lock`
         let status = Command::new("cargo").arg("generate-lockfile").status().context("failed to execute `cargo generate-lockfile`")?;
@@ -101,13 +103,10 @@ fn main() -> anyhow::Result<()> {
 }
 
 /// Load TOML file
-fn load_toml(path: impl AsRef<Path>) -> io::Result<toml::Value> {
-    let mut file = File::open(path.as_ref())?;
+fn load_toml(path: impl AsRef<Path>) -> anyhow::Result<toml::Value> {
+    let contents = fs::read_to_string(path.as_ref())?;
 
-    let mut buf  = Vec::new();
-    file.read_to_end(&mut buf)?;
-
-    Ok(toml::from_slice(&buf)?)
+    Ok(toml::from_str(&contents)?)
 }
 
 /// Discover package names in package/workspace

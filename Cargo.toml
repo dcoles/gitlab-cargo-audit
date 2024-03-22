@@ -11,9 +11,10 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 anyhow = "1"
-petgraph = "0.6"
-rustsec = { version = "0.26", features = ["dependency-tree"] }
+env_logger = "0.11.3"
+petgraph = "0.6.4"
+rustsec = { version = "0.28.4", features = ["dependency-tree"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 time = { version = "0.3.34", features = ["formatting"] }
-toml = "0.5"
+toml = "0.8.12"
