@@ -20,9 +20,14 @@ const CARGO_TOML: &str = "Cargo.toml";
 const LOCKFILE: &str = "Cargo.lock";
 const PACKAGE_MANAGER: &str = "cargo";
 const REPORT_VERSION: &str = "15.0.7";
+const ANALYZER_ID: &str = "gitlab_cargo_audit";
+const ANALYZER_NAME: &str = "gitlab-cargo-audit";
+const ANALYZER_VENDOR: &str = "dcoles";
+const ANALYZER_URL: & str = "https://github.com/dcoles/gitlab-cargo-audit";
 const SCANNER_ID: &str = "cargo_audit";
 const SCANNER_NAME: &str = "cargo-audit";
-const SCANNER_VENDOR: &str = "gitlab-cargo-audit";
+const SCANNER_VENDOR: &str = "RustSec";
+const SCANNER_URL: &str = "https://github.com/RustSec/rustsec/tree/main/cargo-audit";
 
 const ISO8601_CFG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
     .set_formatted_components(iso8601::FormattedComponents::DateTime)
@@ -57,18 +62,18 @@ fn main() -> anyhow::Result<()> {
         vulnerabilities: report_vulnerabilities(&vulnerabilities),
         scan: report::Scan {
             analyzer: report::Analyzer {
-                id: SCANNER_ID.to_string(),
-                name: SCANNER_NAME.to_string(),
-                url: None,
+                id: ANALYZER_ID.to_string(),
+                name: ANALYZER_NAME.to_string(),
+                url: Some(ANALYZER_URL.to_string()),
                 vendor: report::Vendor {
-                    name: SCANNER_VENDOR.to_string(),
+                    name: ANALYZER_VENDOR.to_string(),
                 },
                 version: env!("CARGO_PKG_VERSION").to_string(),
             },
             scanner: report::Scanner {
                 id: SCANNER_ID.to_string(),
                 name: SCANNER_NAME.to_string(),
-                url: None,
+                url: Some(SCANNER_URL.to_string()),
                 vendor: report::Vendor {
                     name: SCANNER_VENDOR.to_string(),
                 },
