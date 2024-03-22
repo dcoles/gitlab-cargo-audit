@@ -12,7 +12,6 @@ use petgraph::visit::Bfs;
 use rustsec::advisory::Severity;
 use rustsec::cargo_lock::dependency::Tree;
 use rustsec::{Database, Vulnerability, Lockfile};
-use serde_json;
 use time::format_description::well_known::iso8601;
 use time::OffsetDateTime;
 
@@ -187,7 +186,7 @@ fn report_dependencies(dependency_tree: &Tree, packages: &HashSet<String>) -> Ve
 
 /// Ancestors of the dependency, starting from a direct project dependency, and ending with an immediate parent of the dependency.
 /// The dependency itself is excluded from the path. Direct dependencies have no path.
-fn dependency_path(predecessor: &[NodeIndex], mut nx: NodeIndex) -> Vec<report::IID> {
+fn dependency_path(predecessor: &[NodeIndex], mut nx: NodeIndex) -> Vec<report::Iid> {
     let mut path = Vec::new();
     loop {
         nx = predecessor[nx.index()];
@@ -196,7 +195,7 @@ fn dependency_path(predecessor: &[NodeIndex], mut nx: NodeIndex) -> Vec<report::
             break;
         }
 
-        path.push(report::IID { iid: nx.index() });
+        path.push(report::Iid { iid: nx.index() });
     }
 
     path.reverse();

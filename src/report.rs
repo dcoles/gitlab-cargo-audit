@@ -158,11 +158,11 @@ pub struct Dependency {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub direct: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub dependency_path: Option<Vec<IID>>
+    pub dependency_path: Option<Vec<Iid>>
 }
 
 #[derive(Serialize, Debug, Default)]
-pub struct IID {
+pub struct Iid {
     pub iid: usize,
 }
 
