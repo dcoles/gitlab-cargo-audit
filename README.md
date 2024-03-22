@@ -1,5 +1,7 @@
 # GitLab cargo-audit
 
+![GitLab Security Report Schema: 15.0.7](https://img.shields.io/badge/Security%20Report%20Schema-15.0.7-blue?logo=gitlab)
+
 Generate GitLab [Dependency Scanning report](https://docs.gitlab.com/ee/user/application_security/dependency_scanning/) using [`cargo-audit`](https://github.com/rustsec/rustsec).
 
 ## Usage
