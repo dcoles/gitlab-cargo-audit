@@ -13,13 +13,21 @@ use rustsec::advisory::Severity;
 use rustsec::cargo_lock::dependency::Tree;
 use rustsec::{Database, Vulnerability, Lockfile};
 use serde_json;
+use time::format_description::well_known::iso8601;
+use time::OffsetDateTime;
 
 const CARGO_TOML: &str = "Cargo.toml";
 const LOCKFILE: &str = "Cargo.lock";
 const PACKAGE_MANAGER: &str = "cargo";
-const REPORT_VERSION: &str = "14.0.6";
+const REPORT_VERSION: &str = "15.0.7";
 const SCANNER_ID: &str = "cargo_audit";
 const SCANNER_NAME: &str = "cargo-audit";
+const SCANNER_VENDOR: &str = "gitlab-cargo-audit";
+
+const ISO8601_CFG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
+    .set_formatted_components(iso8601::FormattedComponents::DateTime)
+    .set_time_precision(iso8601::TimePrecision::Second { decimal_digits: None })
+    .encode();
 
 fn main() -> anyhow::Result<()> {
     if !Path::new(LOCKFILE).exists() && Path::new(CARGO_TOML).exists() {
@@ -30,6 +38,8 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
+    let start = OffsetDateTime::now_utc();
+
     let lockfile = Lockfile::load(LOCKFILE).context("failed to load lockfile")?;
     let cargo_toml = load_toml(CARGO_TOML).context("failed to load Cargo.toml")?;
     let packages = discover_packages(&cargo_toml).context("failed to discover packages")?;
@@ -37,11 +47,38 @@ fn main() -> anyhow::Result<()> {
     let database = Database::fetch().context("failed to fetch advisory-db")?;
     let vulnerabilities = database.vulnerabilities(&lockfile);
 
+    let end = OffsetDateTime::now_utc();
+
     print_vulnerabilities(&vulnerabilities);
+
 
     let report = report::Report {
         version: REPORT_VERSION.to_string(),
         vulnerabilities: report_vulnerabilities(&vulnerabilities),
+        scan: report::Scan {
+            analyzer: report::Analyzer {
+                id: SCANNER_ID.to_string(),
+                name: SCANNER_NAME.to_string(),
+                url: None,
+                vendor: report::Vendor {
+                    name: SCANNER_VENDOR.to_string(),
+                },
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            },
+            scanner: report::Scanner {
+                id: SCANNER_ID.to_string(),
+                name: SCANNER_NAME.to_string(),
+                url: None,
+                vendor: report::Vendor {
+                    name: SCANNER_VENDOR.to_string(),
+                },
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            },
+            start_time: start.format(&iso8601::Iso8601::<ISO8601_CFG>).unwrap(),
+            end_time: end.format(&iso8601::Iso8601::<ISO8601_CFG>).unwrap(),
+            status: report::ScanStatus::Success,
+            r#type: report::ScanType::DependencyScanning,
+        },
         dependency_files: vec![
             report::DependencyFile {
                 path: LOCKFILE.to_string(),
@@ -166,12 +203,9 @@ fn dependency_path(predecessor: &[NodeIndex], mut nx: NodeIndex) -> Vec<report::
 fn report_vulnerabilities(vulnerabilities: &[Vulnerability]) -> Vec<report::Vulnerability> {
     vulnerabilities.iter().map(|vuln| {
         report::Vulnerability {
-            id: Some(vuln.advisory.id.to_string()),  // FIXME: Should be a UUID
-            category: String::from("dependency_scanning"),
+            id: vuln.advisory.id.to_string(),  // FIXME: Should be a UUID
             name: Some(vuln.advisory.title.to_string()),
-            message: Some(format!("[{}] {}", vuln.advisory.package, vuln.advisory.title)),
             description: Some(vuln.advisory.description.clone()),
-            cve: vuln.advisory.id.to_string(),
             severity: vuln.advisory.cvss.as_ref().map(|cvss| map_severity(cvss.severity()))
                 .unwrap_or_default(),
             identifiers: vec![
@@ -184,14 +218,14 @@ fn report_vulnerabilities(vulnerabilities: &[Vulnerability]) -> Vec<report::Vuln
                 // TODO: Add aliases
             ],
             links: if let Some(url) = &vuln.advisory.url {
-                Some(vec![
+                vec![
                     report::Link {
                         url: url.to_string(),
                         .. Default::default()
                     }
-                ])
+                ]
             } else {
-                None
+                vec![]
             },
             location: report::Location {
                 file: String::from(LOCKFILE),
@@ -202,10 +236,6 @@ fn report_vulnerabilities(vulnerabilities: &[Vulnerability]) -> Vec<report::Vuln
                     version: Some(vuln.package.version.to_string()),
                     .. Default::default()
                 },
-            },
-            scanner: report::Scanner {
-                id: String::from(SCANNER_ID),
-                name: String::from(SCANNER_NAME),
             },
             ..Default::default()
         }
