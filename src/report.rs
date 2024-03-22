@@ -28,29 +28,19 @@ pub struct Scan {
 }
 
 #[allow(dead_code)]
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ScanStatus {
+    #[default]
     Success,
     Failure,
 }
 
-impl Default for ScanStatus {
-    fn default() -> Self {
-        ScanStatus::Success
-    }
-}
-
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ScanType {
+    #[default]
     DependencyScanning,
-}
-
-impl Default for ScanType {
-    fn default() -> Self {
-        ScanType::DependencyScanning
-    }
 }
 
 #[derive(Serialize, Debug, Default)]
@@ -116,33 +106,23 @@ pub struct Flag {
     pub description: String,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum FlagType {
+    #[default]
     FlaggedAsLikelyFalsePositive
 }
 
-impl Default for FlagType {
-    fn default() -> FlagType {
-        FlagType::FlaggedAsLikelyFalsePositive
-    }
-}
-
 #[allow(dead_code)]
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Default)]
 pub enum Severity {
     Info,
+    #[default]
     Unknown,
     Low,
     Medium,
     High,
     Critical,
-}
-
-impl Default for Severity {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 #[derive(Serialize, Debug, Default)]
