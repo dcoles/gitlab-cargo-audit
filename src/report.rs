@@ -110,7 +110,7 @@ pub struct Flag {
 #[serde(rename_all = "kebab-case")]
 pub enum FlagType {
     #[default]
-    FlaggedAsLikelyFalsePositive
+    FlaggedAsLikelyFalsePositive,
 }
 
 #[allow(dead_code)]
@@ -158,7 +158,7 @@ pub struct Dependency {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub direct: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub dependency_path: Option<Vec<Iid>>
+    pub dependency_path: Option<Vec<Iid>>,
 }
 
 #[derive(Serialize, Debug, Default)]
@@ -176,5 +176,5 @@ pub struct Package {
 pub struct DependencyFile {
     pub path: String,
     pub package_manager: String,
-    pub dependencies: Vec<Dependency>
+    pub dependencies: Vec<Dependency>,
 }

@@ -1,7 +1,6 @@
 mod report;
 
 use std::collections::HashSet;
-use std::fs;
 use std::io;
 use std::path::Path;
 use std::process::Command;
@@ -9,9 +8,12 @@ use std::process::Command;
 use anyhow::Context;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::Bfs;
+use petgraph::{Direction, Graph};
 use rustsec::advisory::Severity;
 use rustsec::cargo_lock::dependency::Tree;
-use rustsec::{Database, Vulnerability, Lockfile};
+use rustsec::cargo_lock::Dependency;
+use rustsec::package::Package;
+use rustsec::{Database, Lockfile, Vulnerability};
 use time::format_description::well_known::iso8601;
 use time::OffsetDateTime;
 
@@ -22,7 +24,7 @@ const REPORT_VERSION: &str = "15.0.7";
 const ANALYZER_ID: &str = "gitlab_cargo_audit";
 const ANALYZER_NAME: &str = "gitlab-cargo-audit";
 const ANALYZER_VENDOR: &str = "dcoles";
-const ANALYZER_URL: & str = "https://github.com/dcoles/gitlab-cargo-audit";
+const ANALYZER_URL: &str = "https://github.com/dcoles/gitlab-cargo-audit";
 const SCANNER_ID: &str = "cargo_audit";
 const SCANNER_NAME: &str = "cargo-audit";
 const SCANNER_VENDOR: &str = "RustSec";
@@ -30,7 +32,9 @@ const SCANNER_URL: &str = "https://github.com/RustSec/rustsec/tree/main/cargo-au
 
 const ISO8601_CFG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
     .set_formatted_components(iso8601::FormattedComponents::DateTime)
-    .set_time_precision(iso8601::TimePrecision::Second { decimal_digits: None })
+    .set_time_precision(iso8601::TimePrecision::Second {
+        decimal_digits: None,
+    })
     .encode();
 
 fn main() -> anyhow::Result<()> {
@@ -38,7 +42,10 @@ fn main() -> anyhow::Result<()> {
 
     if !Path::new(LOCKFILE).exists() && Path::new(CARGO_TOML).exists() {
         // Try to generate `Cargo.lock`
-        let status = Command::new("cargo").arg("generate-lockfile").status().context("failed to execute `cargo generate-lockfile`")?;
+        let status = Command::new("cargo")
+            .arg("generate-lockfile")
+            .status()
+            .context("failed to execute `cargo generate-lockfile`")?;
         if !status.success() {
             anyhow::bail!("`cargo generate-lockfile` terminated with an error: {status}");
         }
@@ -47,16 +54,15 @@ fn main() -> anyhow::Result<()> {
     let start = OffsetDateTime::now_utc();
 
     let lockfile = Lockfile::load(LOCKFILE).context("failed to load lockfile")?;
-    let cargo_toml = load_toml(CARGO_TOML).context("failed to load Cargo.toml")?;
-    let packages = discover_packages(&cargo_toml).context("failed to discover packages")?;
-    let dependency_tree = lockfile.dependency_tree().context("failed to generate dependency tree")?;
+    let dependency_tree = lockfile
+        .dependency_tree()
+        .context("failed to generate dependency tree")?;
     let database = Database::fetch().context("failed to fetch advisory-db")?;
     let vulnerabilities = database.vulnerabilities(&lockfile);
 
     let end = OffsetDateTime::now_utc();
 
     print_vulnerabilities(&vulnerabilities);
-
 
     let report = report::Report {
         version: REPORT_VERSION.to_string(),
@@ -85,13 +91,7 @@ fn main() -> anyhow::Result<()> {
             status: report::ScanStatus::Success,
             r#type: report::ScanType::DependencyScanning,
         },
-        dependency_files: vec![
-            report::DependencyFile {
-                path: LOCKFILE.to_string(),
-                package_manager: PACKAGE_MANAGER.to_string(),
-                dependencies: report_dependencies(&dependency_tree, &packages)
-            }
-        ],
+        dependency_files: dependency_files(&dependency_tree),
     };
 
     let stdout = io::stdout();
@@ -102,35 +102,6 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Load TOML file
-fn load_toml(path: impl AsRef<Path>) -> anyhow::Result<toml::Value> {
-    let contents = fs::read_to_string(path.as_ref())?;
-
-    Ok(toml::from_str(&contents)?)
-}
-
-/// Discover package names in package/workspace
-fn discover_packages(cargo_toml: &toml::Value) -> anyhow::Result<HashSet<String>> {
-    let mut packages = HashSet::new();
-
-    if let Some(package) = cargo_toml.get("package") {
-        let name = package.get("name").and_then(toml::Value::as_str)
-            .ok_or(anyhow::anyhow!("missing package name"))?;
-
-        packages.insert(name.to_string());
-    } else if let Some(workspace) = cargo_toml.get("workspace") {
-        let members = workspace.get("members").and_then(toml::Value::as_array)
-            .map(|m| m.iter().filter_map(toml::Value::as_str).map(str::to_string))
-            .ok_or(anyhow::anyhow!("missing package members"))?;
-
-        packages.extend(members);
-    } else {
-        anyhow::bail!("missing package or workspace");
-    }
-
-    Ok(packages)
-}
-
 /// Print list of vulnerabilities
 fn print_vulnerabilities(vulnerabilities: &[Vulnerability]) {
     if vulnerabilities.is_empty() {
@@ -138,111 +109,138 @@ fn print_vulnerabilities(vulnerabilities: &[Vulnerability]) {
         return;
     }
 
-    eprintln!("Warning: {} vulnerabilities detected", vulnerabilities.len());
+    eprintln!(
+        "Warning: {} vulnerabilities detected",
+        vulnerabilities.len()
+    );
     for vuln in vulnerabilities {
-        eprintln!("- [{}] {} ({})", vuln.advisory.package, vuln.advisory.title, vuln.advisory.id);
-        eprintln!("  See https://rustsec.org/advisories/{} for details", vuln.advisory.id);
+        eprintln!(
+            "- [{}] {} ({})",
+            vuln.advisory.package, vuln.advisory.title, vuln.advisory.id
+        );
+        eprintln!(
+            "  See https://rustsec.org/advisories/{} for details",
+            vuln.advisory.id
+        );
     }
 }
 
-/// Build list of [`report::Dependency`] from a dependency tree.
-fn report_dependencies(dependency_tree: &Tree, packages: &HashSet<String>) -> Vec<report::Dependency> {
+fn dependency_files(dependency_tree: &Tree) -> Vec<report::DependencyFile> {
+    // The roots are the packages in this workspace (or just the standalone package)
+    let roots: Vec<_> = dependency_tree
+        .nodes()
+        .iter()
+        .filter_map(|(dep, &index)| {
+            if dep.source.is_none() {
+                Some(index)
+            } else {
+                None
+            }
+        })
+        .collect();
+
     let graph = dependency_tree.graph();
 
-    let mut dependencies = Vec::new();
-    for root in dependency_tree.roots() {
-        if !packages.contains(graph[root].name.as_str()) {
-            continue;
-        }
+    let mut dependency_files = vec![];
+    for &root in &roots {
+        let package = &graph[root];
+        dependency_files.push(report::DependencyFile {
+            path: format!("{LOCKFILE} ({} {})", package.name, package.version),
+            package_manager: PACKAGE_MANAGER.to_string(),
+            dependencies: report_dependencies(graph, root),
+        });
+    }
 
-        let mut predecessor = vec![NodeIndex::end(); graph.node_count()];
-        let mut bfs = Bfs::new(&graph, root);
-        while let Some(u) = bfs.next(&graph) {
-            for v in graph.neighbors(u) {
-                let package = &graph[v];
-                if predecessor.contains(&v) {
-                    continue;
-                }
-                predecessor[v.index()] = u;
+    dependency_files.into_iter().collect()
+}
 
-                let dependency_path = dependency_path(&predecessor, v);
+/// Build list of [`report::Dependency`] from a dependency tree.
+fn report_dependencies(
+    graph: &Graph<Package, Dependency>,
+    root: NodeIndex,
+) -> Vec<report::Dependency> {
+    let direct: HashSet<_> = graph
+        .neighbors_directed(root, Direction::Outgoing)
+        .collect();
 
-                dependencies.push(report::Dependency {
-                    package: Some(report::Package {
-                        name: Some(package.name.as_str().to_owned()),
-                    }),
-                    version: Some(package.version.to_string()),
-                    iid: Some(v.index()),
-                    direct: Some(dependency_path.is_empty()),
-                    dependency_path: Some(dependency_path),
-                });
-            }
+    let mut dependencies = HashSet::new();
+
+    let mut bfs = Bfs::new(&graph, root);
+    while let Some(u) = bfs.next(&graph) {
+        for v in graph.neighbors(u) {
+            dependencies.insert(v);
         }
     }
 
     dependencies
-}
+        .into_iter()
+        .map(|v| {
+            let package = &graph[v];
 
-/// Ancestors of the dependency, starting from a direct project dependency, and ending with an immediate parent of the dependency.
-/// The dependency itself is excluded from the path. Direct dependencies have no path.
-fn dependency_path(predecessor: &[NodeIndex], mut nx: NodeIndex) -> Vec<report::Iid> {
-    let mut path = Vec::new();
-    loop {
-        nx = predecessor[nx.index()];
-        if predecessor[nx.index()] == NodeIndex::end() {
-            // `nx` is the root
-            break;
-        }
-
-        path.push(report::Iid { iid: nx.index() });
-    }
-
-    path.reverse();
-
-    path
+            report::Dependency {
+                package: Some(report::Package {
+                    name: Some(package.name.as_str().to_owned()),
+                }),
+                version: Some(package.version.to_string()),
+                iid: Some(v.index()),
+                direct: Some(direct.contains(&v)),
+                dependency_path: None,
+            }
+        })
+        .collect()
 }
 
 /// Build list of [`report::Vulnerability`] from list of [`Vulnerability`]s.
 fn report_vulnerabilities(vulnerabilities: &[Vulnerability]) -> Vec<report::Vulnerability> {
-    vulnerabilities.iter().map(|vuln| {
-        report::Vulnerability {
-            id: vuln.advisory.id.to_string(),  // FIXME: Should be a UUID
-            name: Some(format!("[{}] {}", vuln.advisory.package, vuln.advisory.title)),
-            description: Some(vuln.advisory.description.clone()),
-            severity: vuln.advisory.cvss.as_ref().map(|cvss| map_severity(cvss.severity()))
-                .unwrap_or_default(),
-            identifiers: vec![
-                report::Identifier {
-                    r#type: String::from("rustsec"),
-                    name: vuln.advisory.id.to_string(),
-                    value: vuln.advisory.id.to_string(),
-                    url: Some(format!("https://rustsec.org/advisories/{}", vuln.advisory.id))
-                }
-                // TODO: Add aliases
-            ],
-            links: if let Some(url) = &vuln.advisory.url {
-                vec![
-                    report::Link {
+    vulnerabilities
+        .iter()
+        .map(|vuln| {
+            report::Vulnerability {
+                id: vuln.advisory.id.to_string(), // FIXME: Should be a UUID
+                name: Some(format!(
+                    "[{}] {}",
+                    vuln.advisory.package, vuln.advisory.title
+                )),
+                description: Some(vuln.advisory.description.clone()),
+                severity: vuln
+                    .advisory
+                    .cvss
+                    .as_ref()
+                    .map(|cvss| map_severity(cvss.severity()))
+                    .unwrap_or_default(),
+                identifiers: vec![
+                    report::Identifier {
+                        r#type: String::from("rustsec"),
+                        name: vuln.advisory.id.to_string(),
+                        value: vuln.advisory.id.to_string(),
+                        url: Some(format!(
+                            "https://rustsec.org/advisories/{}",
+                            vuln.advisory.id
+                        )),
+                    }, // TODO: Add aliases
+                ],
+                links: if let Some(url) = &vuln.advisory.url {
+                    vec![report::Link {
                         url: url.to_string(),
-                        .. Default::default()
-                    }
-                ]
-            } else {
-                vec![]
-            },
-            location: report::Location {
-                file: String::from(LOCKFILE),
-                dependency: report::Dependency {
-                    package: Some(report::Package {
-                        name: Some(vuln.package.name.to_string()),
-                    }),
-                    version: Some(vuln.package.version.to_string()),
-                    .. Default::default()
+                        ..Default::default()
+                    }]
+                } else {
+                    vec![]
                 },
-            },
-            ..Default::default()
-        }
-    }).collect()
+                location: report::Location {
+                    file: String::from(LOCKFILE),
+                    dependency: report::Dependency {
+                        package: Some(report::Package {
+                            name: Some(vuln.package.name.to_string()),
+                        }),
+                        version: Some(vuln.package.version.to_string()),
+                        ..Default::default()
+                    },
+                },
+                ..Default::default()
+            }
+        })
+        .collect()
 }
 
 fn map_severity(severity: Severity) -> report::Severity {
