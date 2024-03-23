@@ -207,7 +207,7 @@ fn report_vulnerabilities(vulnerabilities: &[Vulnerability]) -> Vec<report::Vuln
     vulnerabilities.iter().map(|vuln| {
         report::Vulnerability {
             id: vuln.advisory.id.to_string(),  // FIXME: Should be a UUID
-            name: Some(vuln.advisory.title.to_string()),
+            name: Some(format!("[{}] {}", vuln.advisory.package, vuln.advisory.title)),
             description: Some(vuln.advisory.description.clone()),
             severity: vuln.advisory.cvss.as_ref().map(|cvss| map_severity(cvss.severity()))
                 .unwrap_or_default(),
