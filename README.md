@@ -12,7 +12,7 @@ Add the following to your `.gitlab-ci.yml`:
 audit:
   stage: test
   script:
-    - gitlab-cargo-audit > gl-dependency-scanning-report.json
+    - gitlab-cargo-audit --output-path gl-dependency-scanning-report.json
   artifacts:
     when: always
     reports:
