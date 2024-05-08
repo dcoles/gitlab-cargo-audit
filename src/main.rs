@@ -2,10 +2,11 @@ mod report;
 
 use std::collections::HashSet;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::Context;
+use argh::FromArgs;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::Bfs;
 use petgraph::{Direction, Graph};
@@ -37,8 +38,19 @@ const ISO8601_CFG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
     })
     .encode();
 
+/// produces a gitlab consumable cargo-audit report
+#[derive(FromArgs)]
+struct App {
+    /// an optional output path
+    ///
+    /// contents are written as utf-8
+    #[argh(option)]
+    output_path: Option<PathBuf>,
+}
+
 fn main() -> anyhow::Result<()> {
     env_logger::init();
+    let app: App = argh::from_env();
 
     if !Path::new(LOCKFILE).exists() && Path::new(CARGO_TOML).exists() {
         // Try to generate `Cargo.lock`
@@ -94,10 +106,15 @@ fn main() -> anyhow::Result<()> {
         dependency_files: dependency_files(&dependency_tree),
     };
 
-    let stdout = io::stdout();
-    let stdout = stdout.lock();
+    let output: Box<dyn std::io::Write> = match app.output_path {
+        Some(path) => {
+            let output = std::fs::File::create(path).unwrap();
+            Box::new(output)
+        }
+        None => Box::new(io::stdout().lock()),
+    };
 
-    serde_json::to_writer_pretty(stdout, &report)?;
+    serde_json::to_writer_pretty(output, &report)?;
 
     Ok(())
 }
