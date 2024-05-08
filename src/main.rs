@@ -41,7 +41,7 @@ const ISO8601_CFG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
 /// produces a gitlab consumable cargo-audit report
 #[derive(FromArgs)]
 struct App {
-    /// an optional output path
+    /// an optional output path.
     ///
     /// contents are written as utf-8
     #[argh(option)]
@@ -108,7 +108,7 @@ fn main() -> anyhow::Result<()> {
 
     let output: Box<dyn std::io::Write> = match app.output_path {
         Some(path) => {
-            let output = std::fs::File::create(path).unwrap();
+            let output = std::fs::File::create(path)?;
             Box::new(output)
         }
         None => Box::new(io::stdout().lock()),
