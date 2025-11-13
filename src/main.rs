@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use anyhow::Context;
 use argh::FromArgs;
@@ -14,7 +15,7 @@ use rustsec::advisory::Severity;
 use rustsec::cargo_lock::dependency::Tree;
 use rustsec::cargo_lock::Dependency;
 use rustsec::package::Package;
-use rustsec::{Database, Lockfile, Vulnerability};
+use rustsec::{Database, Lockfile, Repository, Vulnerability};
 use time::format_description::well_known::iso8601;
 use time::OffsetDateTime;
 
@@ -46,6 +47,10 @@ struct App {
     /// contents are written as utf-8
     #[argh(option)]
     output_path: Option<PathBuf>,
+
+    /// URL to fetch the advisory-db from, instead of the default location.
+    #[argh(option)]
+    advisory_db_mirror: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -69,7 +74,17 @@ fn main() -> anyhow::Result<()> {
     let dependency_tree = lockfile
         .dependency_tree()
         .context("failed to generate dependency tree")?;
-    let database = Database::fetch().context("failed to fetch advisory-db")?;
+    let database = if let Some(url) = &app.advisory_db_mirror {
+        let repo = Repository::fetch(
+            url,
+            Repository::default_path(),
+            true,
+            Duration::from_secs(5 * 60),
+        ).context("failed to fetch mirrored advisory-db")?;
+        Database::load_from_repo(&repo).context("failed to read fetched advisory-db repo")?
+    } else {
+        Database::fetch().context("failed to fetch advisory-db")?
+    };
     let vulnerabilities = database.vulnerabilities(&lockfile);
 
     let end = OffsetDateTime::now_utc();
