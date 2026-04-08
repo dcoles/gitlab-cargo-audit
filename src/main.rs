@@ -80,7 +80,8 @@ fn main() -> anyhow::Result<()> {
             Repository::default_path(),
             true,
             Duration::from_secs(5 * 60),
-        ).context("failed to fetch mirrored advisory-db")?;
+        )
+        .context("failed to fetch mirrored advisory-db")?;
         Database::load_from_repo(&repo).context("failed to read fetched advisory-db repo")?
     } else {
         Database::fetch().context("failed to fetch advisory-db")?
@@ -240,17 +241,7 @@ fn report_vulnerabilities(vulnerabilities: &[Vulnerability]) -> Vec<report::Vuln
                     .as_ref()
                     .map(|cvss| map_severity(cvss.severity()))
                     .unwrap_or_default(),
-                identifiers: vec![
-                    report::Identifier {
-                        r#type: String::from("rustsec"),
-                        name: vuln.advisory.id.to_string(),
-                        value: vuln.advisory.id.to_string(),
-                        url: Some(format!(
-                            "https://rustsec.org/advisories/{}",
-                            vuln.advisory.id
-                        )),
-                    }, // TODO: Add aliases
-                ],
+                identifiers: map_identifiers(vuln),
                 links: if let Some(url) = &vuln.advisory.url {
                     vec![report::Link {
                         url: url.to_string(),
@@ -273,6 +264,79 @@ fn report_vulnerabilities(vulnerabilities: &[Vulnerability]) -> Vec<report::Vuln
             }
         })
         .collect()
+}
+
+fn map_identifiers(vuln: &Vulnerability) -> Vec<report::Identifier> {
+    use rustsec::advisory::IdKind;
+
+    let mut identifiers = Vec::with_capacity(1 + vuln.advisory.aliases.len());
+    // always add primary RUSTSEC ID:
+    identifiers.push(rustsec_advisory_identifier(&vuln.advisory.id));
+
+    for alias in &vuln.advisory.aliases {
+        identifiers.push(match alias.kind() {
+            IdKind::RustSec => rustsec_advisory_identifier(alias),
+            IdKind::Cve => cve_identifier(alias),
+            IdKind::Ghsa => ghsa_identifier(alias),
+            _ => other_identifier(alias),
+        });
+    }
+
+    identifiers
+}
+
+fn rustsec_advisory_identifier(id: &rustsec::advisory::Id) -> report::Identifier {
+    debug_assert!(id.is_rustsec());
+    report::Identifier {
+        r#type: String::from("rustsec"),
+        name: id.to_string(),
+        value: id.to_string(),
+        url: Some(
+            id.url()
+                .as_ref()
+                .map(String::clone)
+                .unwrap_or_else(|| format!("https://rustsec.org/advisories/{id}")),
+        ),
+    }
+}
+
+fn cve_identifier(id: &rustsec::advisory::Id) -> report::Identifier {
+    debug_assert!(id.is_cve());
+    report::Identifier {
+        r#type: String::from("cve"),
+        name: id.to_string(),
+        value: id.to_string(),
+        url: Some(
+            id.url()
+                .as_ref()
+                .map(String::clone)
+                .unwrap_or_else(|| format!("https://cve.mitre.org/cgi-bin/cvename.cgi?name={id}")),
+        ),
+    }
+}
+
+fn ghsa_identifier(id: &rustsec::advisory::Id) -> report::Identifier {
+    debug_assert!(id.is_ghsa());
+    report::Identifier {
+        r#type: String::from("ghsa"),
+        name: id.to_string(),
+        value: id.to_string(),
+        url: Some(
+            id.url()
+                .as_ref()
+                .map(String::clone)
+                .unwrap_or_else(|| format!("https://github.com/advisories/{id}")),
+        ),
+    }
+}
+
+fn other_identifier(id: &rustsec::advisory::Id) -> report::Identifier {
+    report::Identifier {
+        r#type: String::from("other"),
+        name: id.to_string(),
+        value: id.to_string(),
+        url: id.url().clone(),
+    }
 }
 
 fn map_severity(severity: Severity) -> report::Severity {
