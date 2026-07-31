@@ -1,0 +1,56 @@
+name: Build and Publish
+
+permissions:
+  id-token: write
+  contents: read
+  attestations: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git reference'
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        BUILD_TARGET: ["x86_64-unknown-linux-gnu"]
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        ref: "${{ inputs.ref }}"
+
+    - name: Print Rust version
+      run: rustup --version
+
+    - name: Build
+      run: cargo build --target "${{ matrix.BUILD_TARGET }}" --release
+
+    - name: Run tests
+      run: cargo test --target "${{ matrix.BUILD_TARGET }}" --release
+
+    - name: Generate artifact attestation
+      uses: actions/attest@v4
+      with:
+        subject-path: target/${{ matrix.BUILD_TARGET }}/release/gitlab-cargo-audit
+
+    - name: Create archive
+      run: |
+        P="gitlab-cargo-audit-${{ matrix.BUILD_TARGET }}-${{ inputs.ref }}"
+        mkdir -p "out/${P}"
+        cp "target/${{ matrix.BUILD_TARGET }}/release/gitlab-cargo-audit" "out/${P}"
+        tar -czvf "${P}.tgz" -C out "${P}"
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: "gitlab-cargo-audit-${{ matrix.BUILD_TARGET }}-${{ inputs.ref }}"
+        path: "gitlab-cargo-audit-${{ matrix.BUILD_TARGET }}-${{ inputs.ref }}.tgz"
+        archive: false
